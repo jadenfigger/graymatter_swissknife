@@ -5,7 +5,7 @@ import numpy as np
 from .powderaverage.powderaverage import powder_average, normalize_sigma, save_data_as_npz
 from .models.find_model import find_model
 from .models.parameters.acq_parameters import AcquisitionParameters
-from .models.parameters.save_parameters import save_estimations_as_nifti, save_initialization_as_nifti
+from .models.parameters.save_parameters import save_estimations_as_nifti, save_initialization_as_nifti, save_diagnostics_as_nifti
 from .nls.nls import nls_parallel
 from .nls.gridsearch import find_nls_initialization
 
@@ -13,6 +13,7 @@ from .nls.gridsearch import find_nls_initialization
 def estimate_model(model_name, dwi_path, bvals_path, delta_path, small_delta, lowb_noisemap_path, out_path, 
                    mask_path=None, fixed_parameters=None, adjust_parameter_limits=None, 
                    save_nls_initialization=False,
+                   save_diagnostics=False,
                    optimization_method='NLS', xgboost_model_path=None, retrain_xgboost=False,
                    n_cores=-1, force_cpu=False, debug=False):
     """
@@ -43,6 +44,11 @@ def estimate_model(model_name, dwi_path, bvals_path, delta_path, small_delta, lo
         Allows to adjust the parameter limits for the Non-Linear Least Squares if not set to None. Tuple of adjusted parameter limits for the model.
         The tuple must have the same length as the number of parameters of the model (with or without noise correction).
         Example of use: Adjust the parameter limits for Di to [1.5, 2.5]µm²/ms and De to [0.5, 1.5]µm²/ms in the NEXI model by specifying adjust_parameter_limits=(None, [1.5, 2.5], [0.5, 1.5], None)
+    save_nls_initialization : bool, optional
+        If True, save the NLS initialization as NIfTI files. The default is False.
+    save_diagnostics : bool, optional
+        If True, compute and save comprehensive diagnostic maps including predicted signal,
+        residuals, RMSE, NRMSE, cost, and bounds-hit maps. The default is False.
     optimization_method : string, optional
         Optimization method to use. 'NLS' for Non-Linear Least Squares. 'XGBoost' for XGBoost (Machine Learning). 
         The default is 'NLS'.
@@ -261,6 +267,15 @@ def estimate_model(model_name, dwi_path, bvals_path, delta_path, small_delta, lo
     # Save the model parameters as nifti
     save_estimations_as_nifti(estimations, microstruct_model, powder_average_path, updated_mask_path, out_path, optimization_method)
 
+    ##########################################################################
+    # Diagnostics
+    ##########################################################################
+    if save_diagnostics:
+        save_diagnostics_as_nifti(
+            estimations, signal, sigma, microstruct_model, acq_param,
+            powder_average_path, updated_mask_path, out_path, n_cores=n_cores
+        )
+
 
 if __name__ == '__main__':
     # Parse arguments
@@ -281,6 +296,7 @@ if __name__ == '__main__':
     parser.add_argument('--fixed_parameters', help='tuple of fixed parameters', required=False, default=None)
     parser.add_argument('--adjust_parameter_limits', help='tuple of adjusted parameter limits', required=False, default=None)
     parser.add_argument('--save_nls_initialization', help='boolean to save the Non-Linear Least Square initialization', required=False, default=False)
+    parser.add_argument('--save_diagnostics', help='boolean to save diagnostic maps', required=False, action='store_true')
     parser.add_argument('--optimization_method', help='optimization method to use', required=False, default='NLS')
     parser.add_argument('--xgboost_model_path', help='path to the XGBoost model file', required=False, default=None)
     parser.add_argument('--retrain_xgboost', help='retrain the XGBoost model', required=False, action='store_true')
@@ -294,6 +310,7 @@ if __name__ == '__main__':
                    small_delta=args.small_delta, lowb_noisemap_path=args.lowb_noisemap_path, out_path=args.out_path, 
                    mask_path=args.mask_path, fixed_parameters=args.fixed_parameters, adjust_parameter_limits=args.adjust_parameter_limits, 
                    save_nls_initialization=args.save_nls_initialization,
+                   save_diagnostics=args.save_diagnostics,
                    optimization_method=args.optimization_method, 
                    xgboost_model_path=args.xgboost_model_path, retrain_xgboost=args.retrain_xgboost,
                    n_cores=args.n_cores, force_cpu=args.force_cpu, debug=args.debug)
